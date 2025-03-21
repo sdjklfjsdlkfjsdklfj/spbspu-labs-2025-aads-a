@@ -20,7 +20,7 @@ int main(int argc, char** argv)
         throw std::logic_error("Failed to open file: " + filePath);
       }
     }
-    std::istream& in = fin ? fin : std::cin;
+    std::istream& in = fin.is_open() ? fin : std::cin;
     PostfixExpression expr = infixToPostfix(in);
     std::cout << expr.evaluate();
     std::cout << '\n';
