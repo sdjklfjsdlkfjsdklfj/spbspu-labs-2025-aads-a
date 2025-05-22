@@ -6,6 +6,8 @@
 #include <tuple>
 #include <utility>
 #include "internal/map-node.hpp"
+#include "queue.hpp"
+#include "stack.hpp"
 #include "type-utils.hpp"
 
 namespace kizhin {
@@ -104,6 +106,13 @@ namespace kizhin {
 
     std::pair< iterator, iterator > equalRange(const key_type&);
     std::pair< const_iterator, const_iterator > equalRange(const key_type&) const;
+
+    template < typename F >
+    F traverseLmr(F) const;
+    template < typename F >
+    F traverseRml(F) const;
+    template < typename F >
+    F traverseBreadth(F) const;
 
   private:
     using Node = detail::Node< value_type >;
@@ -629,6 +638,78 @@ auto kizhin::Map< K, T, C >::equalRange(const key_type& key) const
     -> std::pair< const_iterator, const_iterator >
 {
   return std::make_pair(lowerBound(key), upperBound(key));
+}
+
+template < typename K, typename T, typename C >
+template < typename F >
+F kizhin::Map< K, T, C >::traverseLmr(F func) const
+{
+  Stack< std::pair< Node*, const_pointer > > values;
+  Node* current = root_;
+  while (!values.empty() || current != nullptr) {
+    while (current != nullptr) {
+      values.emplace(current, current->begin);
+      current = current->children[0];
+    }
+    Node* node = values.top().first;
+    const_pointer val = values.top().second;
+    values.pop();
+    func(*val);
+    if (val == node->begin && detail::size(node) == 2) {
+      values.emplace(node, val + 1);
+      current = node->children[1];
+    } else {
+      current = node->children[detail::size(node)];
+    }
+  }
+  return func;
+}
+
+template < typename K, typename T, typename C >
+template < typename F >
+F kizhin::Map< K, T, C >::traverseRml(F func) const
+{
+  Stack< std::pair< Node*, const_pointer > > values;
+  Node* current = root_;
+  while (!values.empty() || current != nullptr) {
+    while (current != nullptr) {
+      values.emplace(current, current->end - 1);
+      current = current->children[detail::size(current)];
+    }
+    Node* node = values.top().first;
+    const_pointer val = values.top().second;
+    values.pop();
+    func(*val);
+    if (val != node->begin) {
+      values.emplace(node, val - 1);
+      current = node->children[val == node->begin + 1];
+    } else {
+      current = node->children[0];
+    }
+  }
+  return func;
+}
+
+template < typename K, typename T, typename C >
+template < typename F >
+F kizhin::Map< K, T, C >::traverseBreadth(F func) const
+{
+  if (empty()) {
+    return func;
+  }
+  Queue< const Node* > nodes;
+  nodes.push(root_);
+  while (!nodes.empty()) {
+    const Node* current = nodes.front();
+    nodes.pop();
+    func = std::for_each(current->begin, current->end, func);
+    for (const Node* child: current->children) {
+      if (child) {
+        nodes.push(child);
+      }
+    }
+  }
+  return func;
 }
 
 template < typename K, typename T, typename C >
